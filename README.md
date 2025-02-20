@@ -33,3 +33,4 @@ If it doesn't work automatically, then open a browser and enter the URL: localho
 You should see the frontpage with the title of the application and one example asset should already be created, shown and stored in the database.
 
 To understand how the application works, open the file /react-frontend/public/index.html and read through the comments and the code.
+"# AMS-1" 
