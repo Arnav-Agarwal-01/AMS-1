@@ -1,0 +1,17 @@
+AMS-1/
+├── react-frontend/
+│   ├── package.json
+│   ├── src/
+│   │   ├── App.js
+│   │   ├── App.css
+│   │   ├── index.js
+│   │   └── components/
+│   │       ├── AddAsset.js
+│   │       ├── ViewAssets.js
+│   │       ├── LandingPage.js
+│   │       └── styles.css
+└── express-mongo-backend/
+    ├── server.js
+    ├── package.json
+    ├── .env
+    └── README.md
