@@ -1,69 +1,3 @@
-// import React, { useState } from "react";
-// import "./AssetManager.css"; // Import CSS file
-
-// const AssetManager = () => {
-//   const [assets, setAssets] = useState([]);
-//   const [assetName, setAssetName] = useState("");
-//   const [assetValue, setAssetValue] = useState("");
-
-//   const handleAddAsset = () => {
-//     if (!assetName || !assetValue) {
-//       alert("Please enter both asset name and value.");
-//       return;
-//     }
-    
-//     const newAsset = {
-//       id: assets.length + 1,
-//       name: assetName,
-//       value: assetValue,
-//     };
-
-//     setAssets([...assets, newAsset]);
-//     setAssetName("");
-//     setAssetValue("");
-//   };
-
-//   return (
-//     <div className="container">
-//       <h1>Asset Management System</h1>
-//       <div className="input-group">
-//         <input
-//           type="text"
-//           placeholder="Enter asset name"
-//           value={assetName}
-//           onChange={(e) => setAssetName(e.target.value)}
-//         />
-//         <input
-//           type="text"
-//           placeholder="Enter asset value"
-//           value={assetValue}
-//           onChange={(e) => setAssetValue(e.target.value)}
-//         />
-//         <button onClick={handleAddAsset}>Add Asset</button>
-//       </div>
-//       <table>
-//         <thead>
-//           <tr>
-//             <th>ID</th>
-//             <th>Asset Name</th>
-//             <th>Value</th>
-//           </tr>
-//         </thead>
-//         <tbody>
-//           {assets.map((asset) => (
-//             <tr key={asset.id}>
-//               <td>{asset.id}</td>
-//               <td>{asset.name}</td>
-//               <td>{asset.value}</td>
-//             </tr>
-//           ))}
-//         </tbody>
-//       </table>
-//     </div>
-//   );
-// };
-
-// export default AssetManager;
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -81,7 +15,7 @@ function AssetManager() {
 
   const fetchAssets = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/assets/");
+      const response = await axios.get("http://localhost:5001/assets/");
       setAssets(response.data);
     } catch (error) {
       console.error("Error fetching assets:", error);
@@ -90,7 +24,7 @@ function AssetManager() {
 
   const addAsset = async () => {
     try {
-      await axios.post("http://localhost:5000/assets/add", {
+      await axios.post("http://localhost:5001/assets/add", {
         ...newAsset,
         date_added: newAsset.date_added || new Date(),
       });
@@ -103,18 +37,25 @@ function AssetManager() {
 
   const deleteAsset = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/assets/delete/${id}`);
+      await axios.delete(`http://localhost:5001/assets/delete/${id}`);
       fetchAssets();
     } catch (error) {
       console.error("Error deleting asset:", error);
     }
   };
 
-  const markForMaintenance = async (id) => {
+  const markForMaintenance = async (id, totalQuantity) => {
+    const quantity = prompt(`Enter quantity to mark for maintenance (max ${totalQuantity}):`);
+    if (!quantity || isNaN(quantity) || quantity > totalQuantity || quantity <= 0) {
+      alert("Please enter a valid quantity");
+      return;
+    }
+
     try {
-      await axios.put(`http://localhost:5000/assets/maintenance/${id}`, {
+      await axios.put(`http://localhost:5001/assets/maintenance/${id}`, {
         status: "Needs Maintenance",
         maintenance_reason: "Requires checkup",
+        quantity: parseInt(quantity)
       });
       fetchAssets();
     } catch (error) {
@@ -166,7 +107,7 @@ function AssetManager() {
               <td>{asset.status}</td>
               <td>
                 <button onClick={() => deleteAsset(asset._id)}>Delete</button>
-                <button onClick={() => markForMaintenance(asset._id)}>Mark for Maintenance</button>
+                <button onClick={() => markForMaintenance(asset._id, asset.quantity)}>Mark for Maintenance</button>
               </td>
             </tr>
           ))}

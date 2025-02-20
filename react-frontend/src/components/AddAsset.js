@@ -23,7 +23,7 @@ function AddAsset({ setPage }) {
     };
 
     try {
-      const response = await axios.post("http://localhost:5000/assets/add", updatedAsset);
+      const response = await axios.post("http://localhost:5001/assets/add", updatedAsset);
       console.log("Asset added:", response.data);
 
       alert("Asset added successfully!");

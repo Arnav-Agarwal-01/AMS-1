@@ -45,14 +45,47 @@ router.delete("/delete/:id", async (req, res) => {
 // Mark an asset for maintenance
 router.put("/maintenance/:id", async (req, res) => {
   try {
-    const { status, maintenance_reason } = req.body;
-    const updatedAsset = await Asset.findByIdAndUpdate(
-      req.params.id,
-      { status, maintenance_reason },
-      { new: true }
-    );
+    const { status, maintenance_reason, quantity } = req.body;
+    const asset = await Asset.findById(req.params.id);
 
-    res.json({ message: "Asset updated", asset: updatedAsset });
+    if (!asset) {
+      return res.status(404).json({ error: "Asset not found" });
+    }
+
+    if (quantity > asset.quantity) {
+      return res.status(400).json({ error: "Requested quantity exceeds available quantity" });
+    }
+
+    // Create or update maintenance asset
+    let maintenanceAsset = await Asset.findOne({
+      asset_name: asset.asset_name,
+      status: "Needs Maintenance"
+    });
+
+    if (maintenanceAsset) {
+      maintenanceAsset.quantity += parseInt(quantity);
+      await maintenanceAsset.save();
+    } else {
+      maintenanceAsset = new Asset({
+        asset_name: asset.asset_name,
+        asset_value: asset.asset_value,
+        quantity: parseInt(quantity),
+        status: "Needs Maintenance",
+        maintenance_reason
+      });
+      await maintenanceAsset.save();
+    }
+
+    // Update original asset quantity
+    asset.quantity -= parseInt(quantity);
+    
+    if (asset.quantity === 0) {
+      await Asset.findByIdAndDelete(req.params.id);
+    } else {
+      await asset.save();
+    }
+
+    res.json({ message: "Asset updated", maintenanceAsset });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

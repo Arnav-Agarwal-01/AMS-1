@@ -1,74 +1,10 @@
-// const express = require("express");
-// const mongoose = require("mongoose");
-// const cors = require("cors");
-
-// const app = express();
-// app.use(express.json());
-// app.use(cors());
-
-// mongoose.connect("mongodb+srv://user1:user1@dravya01.ioeeo.mongodb.net/ams?retryWrites=true&w=majority&appName=Dravya01", { useNewUrlParser: true, useUnifiedTopology: true });
-
-// const assetSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   quantity: { type: Number, required: true },
-//   manufactureDate: { type: String, default: () => new Date().toISOString().split("T")[0] },
-//   status: { type: String, enum: ["working", "damaged"], default: "working" },
-//   maintenanceReason: { type: String, default: "" }  // <-- Added this field
-// });
-
-// const Asset = mongoose.model("Asset", assetSchema);
-
-
-// // Add asset
-// app.post("/assets/add", async (req, res) => {
-//   try {
-//     console.log("Received Data:", req.body); // Debugging Line
-//     const newAsset = new Asset(req.body);
-//     await newAsset.save();
-//     res.status(201).json({ message: "Asset added successfully!" });
-//   } catch (error) {
-//     console.error("Error saving asset:", error);
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// });
-
-// // Get all assets
-// app.get("/assets/", async (req, res) => {
-//   const assets = await Asset.find();
-//   res.json(assets);
-// });
-
-// // Delete asset
-// app.delete("/assets/delete/:id", async (req, res) => {
-//     try {
-//       await Asset.findByIdAndDelete(req.params.id);
-//       res.status(200).json({ message: "Asset deleted successfully!" });
-//     } catch (error) {
-//       res.status(500).json({ message: "Error deleting asset", error });
-//     }
-//   });
-// app.put("/assets/maintenance/:id", async (req, res) => {
-//     try {
-//       const { reason } = req.body;
-//       const updatedAsset = await Asset.findByIdAndUpdate(
-//         req.params.id,
-        
-//         { new: true }
-//       );
-//       res.status(200).json(updatedAsset);
-//     } catch (error) {
-//       res.status(500).json({ message: "Error updating maintenance status", error });
-//     }
-//   });
-    
-// app.listen(5000, () => console.log("Server running on port 5000"));
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
@@ -84,8 +20,11 @@ const assetSchema = new mongoose.Schema({
   name: { type: String, required: true },
   quantity: { type: Number, required: true },
   manufactureDate: { type: String, default: () => new Date().toISOString().split("T")[0] },
-  status: { type: String, enum: ["working", "damaged"], default: "working" },
+  status: { type: String, enum: ["working", "damaged", "deleted"], default: "working" },
   maintenanceReason: { type: String, default: "N/A" },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date },
+  deletionReason: { type: String }
 });
 
 const Asset = mongoose.model("Asset", assetSchema);
@@ -124,13 +63,30 @@ app.post("/assets/add", async (req, res) => {
 // 📌 Delete an asset
 app.delete("/assets/delete/:id", async (req, res) => {
   try {
-    const deletedAsset = await Asset.findByIdAndDelete(req.params.id);
-    if (!deletedAsset) {
+    const asset = await Asset.findById(req.params.id);
+    if (!asset) {
       return res.status(404).json({ message: "Asset not found" });
     }
+    
+    asset.isDeleted = true;
+    asset.status = "deleted";
+    asset.deletedAt = new Date();
+    asset.deletionReason = req.body.reason || "Manual deletion";
+    await asset.save();
+    
     res.status(200).json({ message: "Asset deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting asset", error });
+  }
+});
+
+// 📌 Fetch deleted assets
+app.get("/assets/deleted", async (req, res) => {
+  try {
+    const assets = await Asset.find({ isDeleted: true });
+    res.status(200).json(assets);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching deleted assets", error });
   }
 });
 
@@ -157,23 +113,59 @@ app.put("/assets/update-quantity/:id", async (req, res) => {
 // 📌 Mark asset as damaged and add maintenance reason
 app.put("/assets/maintenance/:id", async (req, res) => {
   try {
-    const { reason } = req.body;
+    const { reason, quantity } = req.body;
+    const originalAsset = await Asset.findById(req.params.id);
+
+    if (!originalAsset) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
 
     if (!reason) {
       return res.status(400).json({ message: "Maintenance reason is required" });
     }
 
-    const updatedAsset = await Asset.findByIdAndUpdate(
-      req.params.id,
-      { status: "damaged", maintenanceReason: reason },
-      { new: true }
-    );
-
-    if (!updatedAsset) {
-      return res.status(404).json({ message: "Asset not found" });
+    if (quantity > originalAsset.quantity) {
+      return res.status(400).json({ message: "Invalid maintenance quantity" });
     }
 
-    res.status(200).json({ message: "Maintenance status updated", asset: updatedAsset });
+    // Create or update maintenance asset
+    let maintenanceAsset = await Asset.findOne({
+      name: originalAsset.name,
+      status: "damaged",
+      maintenanceReason: reason
+    });
+
+    if (maintenanceAsset) {
+      maintenanceAsset.quantity += quantity;
+      await maintenanceAsset.save();
+    } else {
+      maintenanceAsset = new Asset({
+        name: originalAsset.name,
+        quantity: quantity,
+        manufactureDate: originalAsset.manufactureDate,
+        status: "damaged",
+        maintenanceReason: reason
+      });
+      await maintenanceAsset.save();
+    }
+
+    // Update original asset
+    const remainingQuantity = originalAsset.quantity - quantity;
+    let workingAsset = null;
+
+    if (remainingQuantity > 0) {
+      originalAsset.quantity = remainingQuantity;
+      await originalAsset.save();
+      workingAsset = originalAsset;
+    } else {
+      await Asset.findByIdAndDelete(originalAsset._id);
+    }
+
+    res.status(200).json({
+      message: "Maintenance status updated",
+      workingAsset,
+      maintenanceAsset
+    });
   } catch (error) {
     res.status(500).json({ message: "Error updating maintenance status", error });
   }
