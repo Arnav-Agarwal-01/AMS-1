@@ -1,4 +1,3 @@
-// server setup
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -16,7 +15,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.error("MongoDB Connection Error:", err));
 
-// asset db structure
+// Asset Schema
 const assetSchema = new mongoose.Schema({
   name: { type: String, required: true },
   quantity: { type: Number, required: true },
@@ -32,7 +31,7 @@ const Asset = mongoose.model("Asset", assetSchema);
 
 // Routes
 
-// get all assets
+// 📌 Fetch all assets
 app.get("/assets", async (req, res) => {
   try {
     const assets = await Asset.find();
@@ -42,7 +41,7 @@ app.get("/assets", async (req, res) => {
   }
 });
 
-// add new asset
+// 📌 Add a new asset
 app.post("/assets/add", async (req, res) => {
   try {
     const { name, quantity, manufactureDate, status } = req.body;
@@ -61,7 +60,7 @@ app.post("/assets/add", async (req, res) => {
   }
 });
 
-// delete asset
+// 📌 Delete an asset
 app.delete("/assets/delete/:id", async (req, res) => {
   try {
     const asset = await Asset.findById(req.params.id);
@@ -81,7 +80,7 @@ app.delete("/assets/delete/:id", async (req, res) => {
   }
 });
 
-// get deleted stuff
+// 📌 Fetch deleted assets
 app.get("/assets/deleted", async (req, res) => {
   try {
     const assets = await Asset.find({ isDeleted: true });
@@ -91,7 +90,7 @@ app.get("/assets/deleted", async (req, res) => {
   }
 });
 
-// change quantity
+// 📌 Update asset quantity (Increment/Decrement)
 app.put("/assets/update-quantity/:id", async (req, res) => {
   try {
     const { change } = req.body;
@@ -111,7 +110,7 @@ app.put("/assets/update-quantity/:id", async (req, res) => {
   }
 });
 
-// mark as broken
+// 📌 Mark asset as damaged and add maintenance reason
 app.put("/assets/maintenance/:id", async (req, res) => {
   try {
     const { reason, quantity } = req.body;
@@ -172,5 +171,5 @@ app.put("/assets/maintenance/:id", async (req, res) => {
   }
 });
 
-// run server
+// Start Server
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
