@@ -1,111 +1,183 @@
-// on the server side, we have no build process so we cannot use the ES6 import
-// instead we use "require" in order to use functionality that is not defined in this file
+// const express = require("express");
+// const mongoose = require("mongoose");
+// const cors = require("cors");
 
-const express = require('express');
+// const app = express();
+// app.use(express.json());
+// app.use(cors());
+
+// mongoose.connect("mongodb+srv://user1:user1@dravya01.ioeeo.mongodb.net/ams?retryWrites=true&w=majority&appName=Dravya01", { useNewUrlParser: true, useUnifiedTopology: true });
+
+// const assetSchema = new mongoose.Schema({
+//   name: { type: String, required: true },
+//   quantity: { type: Number, required: true },
+//   manufactureDate: { type: String, default: () => new Date().toISOString().split("T")[0] },
+//   status: { type: String, enum: ["working", "damaged"], default: "working" },
+//   maintenanceReason: { type: String, default: "" }  // <-- Added this field
+// });
+
+// const Asset = mongoose.model("Asset", assetSchema);
+
+
+// // Add asset
+// app.post("/assets/add", async (req, res) => {
+//   try {
+//     console.log("Received Data:", req.body); // Debugging Line
+//     const newAsset = new Asset(req.body);
+//     await newAsset.save();
+//     res.status(201).json({ message: "Asset added successfully!" });
+//   } catch (error) {
+//     console.error("Error saving asset:", error);
+//     res.status(500).json({ message: "Server error", error });
+//   }
+// });
+
+// // Get all assets
+// app.get("/assets/", async (req, res) => {
+//   const assets = await Asset.find();
+//   res.json(assets);
+// });
+
+// // Delete asset
+// app.delete("/assets/delete/:id", async (req, res) => {
+//     try {
+//       await Asset.findByIdAndDelete(req.params.id);
+//       res.status(200).json({ message: "Asset deleted successfully!" });
+//     } catch (error) {
+//       res.status(500).json({ message: "Error deleting asset", error });
+//     }
+//   });
+// app.put("/assets/maintenance/:id", async (req, res) => {
+//     try {
+//       const { reason } = req.body;
+//       const updatedAsset = await Asset.findByIdAndUpdate(
+//         req.params.id,
+        
+//         { new: true }
+//       );
+//       res.status(200).json(updatedAsset);
+//     } catch (error) {
+//       res.status(500).json({ message: "Error updating maintenance status", error });
+//     }
+//   });
+    
+// app.listen(5000, () => console.log("Server running on port 5000"));
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
+
 const app = express();
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const assetRoutes = express.Router();
-const PORT = 8080;
+const PORT = process.env.PORT || 5000;
 
-// the data structure to save an asset is defined in /express-mongo-backend/asset.model.js
-
-let Asset = require('./asset.model');
-
-// we need cors because JavaScript could otherwise not make requests to other servers than the one that delivered the JavaScript 
-
+// Middleware
 app.use(cors());
+app.use(express.json());
 
-//to parse the JSON string in the body of the post requests into JavaScript objects we use the bodyParser
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.error("MongoDB Connection Error:", err));
 
-app.use(bodyParser.json());
+// Asset Schema
+const assetSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  quantity: { type: Number, required: true },
+  manufactureDate: { type: String, default: () => new Date().toISOString().split("T")[0] },
+  status: { type: String, enum: ["working", "damaged"], default: "working" },
+  maintenanceReason: { type: String, default: "N/A" },
+});
 
-//we connect the mongoose object to the MongoDB database "assets" that will store and deliver our asset data
+const Asset = mongoose.model("Asset", assetSchema);
 
-mongoose.connect('mongodb://127.0.0.1:27017/assets', { useNewUrlParser: true });
-const connection = mongoose.connection;
+// Routes
 
-connection.once('open', function () {
-    console.log("MongoDB database connection established successfully");
-})
+// 📌 Fetch all assets
+app.get("/assets", async (req, res) => {
+  try {
+    const assets = await Asset.find();
+    res.status(200).json(assets);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching assets", error });
+  }
+});
 
+// 📌 Add a new asset
+app.post("/assets/add", async (req, res) => {
+  try {
+    const { name, quantity, manufactureDate, status } = req.body;
 
-//now we define the rest endpoints for the CRUD methods and implement the CRUD methods
-
-//R: read all assets
-
-assetRoutes.route('/').get(function (req, res) {
-    console.log("got a request");
-    Asset.find(function (err, assets) {
-        if (err) {
-            console.log(err);
-        } else {
-            res.json(assets);
-        }
+    const newAsset = new Asset({
+      name,
+      quantity,
+      manufactureDate: manufactureDate || new Date().toISOString().split("T")[0],
+      status: status || "working",
     });
+
+    await newAsset.save();
+    res.status(201).json({ message: "Asset added successfully", asset: newAsset });
+  } catch (error) {
+    res.status(500).json({ message: "Error adding asset", error });
+  }
 });
 
-//C: creat a new asset
-
-assetRoutes.route('/add').post(function (req, res) {
-    console.log("Request to save this asset:" + JSON.stringify(req.body));
-    let asset = new Asset(req.body);
-    asset.save()
-        .then(asset => {
-            res.status(200).json({ 'asset': 'asset added successfully' });
-        })
-        .catch(err => {
-            res.status(400).send('adding new asset failed');
-        });
+// 📌 Delete an asset
+app.delete("/assets/delete/:id", async (req, res) => {
+  try {
+    const deletedAsset = await Asset.findByIdAndDelete(req.params.id);
+    if (!deletedAsset) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
+    res.status(200).json({ message: "Asset deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting asset", error });
+  }
 });
 
-//R: read one asset defined be the id of the asset
+// 📌 Update asset quantity (Increment/Decrement)
+app.put("/assets/update-quantity/:id", async (req, res) => {
+  try {
+    const { change } = req.body;
+    const asset = await Asset.findById(req.params.id);
+    
+    if (!asset) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
 
-assetRoutes.route('/:id').get(function (req, res) {
-    let id = req.params.id;
-    Asset.findById(id, function (err, asset) {
-        res.json(asset);
-    });
+    const newQuantity = Math.max(0, asset.quantity + change);
+    asset.quantity = newQuantity;
+    await asset.save();
+
+    res.status(200).json({ message: "Quantity updated", quantity: newQuantity });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating quantity", error });
+  }
 });
 
-//U: update the asset with the given id
+// 📌 Mark asset as damaged and add maintenance reason
+app.put("/assets/maintenance/:id", async (req, res) => {
+  try {
+    const { reason } = req.body;
 
-assetRoutes.route('/update/:id').post(function (req, res) {
-    Asset.findById(req.params.id, function (err, asset) {
-        if (!asset) res.status(404).send("Asset to update not found, asset _id:" + req.params.id);
-        else {
-            asset.asset_id = req.body.asset_id;
-            asset.asset_name = req.body.asset_name;
-            asset.asset_value = req.body.asset_value;
+    if (!reason) {
+      return res.status(400).json({ message: "Maintenance reason is required" });
+    }
 
-            asset.save().then(asset => {
-                res.json('asset updated!');
-            })
-                .catch(err => {
-                    res.status(400).send("Update not possible");
-                });
-        }
-    });
+    const updatedAsset = await Asset.findByIdAndUpdate(
+      req.params.id,
+      { status: "damaged", maintenanceReason: reason },
+      { new: true }
+    );
+
+    if (!updatedAsset) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
+
+    res.status(200).json({ message: "Maintenance status updated", asset: updatedAsset });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating maintenance status", error });
+  }
 });
 
-//D: delete the asset with the given id
-
-assetRoutes.route('/delete/:id').get(function (req, res) {
-    Asset.deleteOne({ "_id": req.params.id }, function (err, asset) {
-        if (!asset)
-            res.status(404).send("data is not found");
-        else
-            res.json('asset deleted!');
-    });
-});
-
-//connect the rest endpoints to the express server
-
-app.use('/assets', assetRoutes);
-
-//start the server and make it listen and answer to requests to the defined port
-
-app.listen(PORT, function () {
-    console.log("Server should be running on Port: " + PORT);
-});
+// Start Server
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
